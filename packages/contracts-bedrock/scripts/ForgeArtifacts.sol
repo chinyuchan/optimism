@@ -78,9 +78,32 @@ library ForgeArtifacts {
         string[] memory cmd = new string[](3);
         cmd[0] = Executables.bash;
         cmd[1] = "-c";
-        cmd[2] = string.concat(Executables.jq, " '.methodIdentifiers | keys' < ", _getForgeArtifactPath(_name));
+        cmd[2] = string.concat(
+            Executables.jq,
+            // We need to explicitly handle the cases where .methodIdentifiers isn't present or is
+            // an empty object. You'd think that Process.run would be fine with an empty array but
+            // that isn't the case so we return the array ["dummy_result"] for empty/error cases.
+            " 'if (.methodIdentifiers // {} | length) == 0 then [\"dummy_result\"] else .methodIdentifiers | keys end' < ",
+            _getForgeArtifactPath(_name)
+        );
         bytes memory res = Process.run(cmd);
         ids_ = stdJson.readStringArray(string(res), "");
+
+        // Clear out the dummy result if it's the only thing in the array.
+        // It's fine that we clear this out since this would never return "dummy_result" from a
+        // real function since we'd expect the identifier to look like "dummy_result()" with
+        // parentheses added, at a minimum.
+        if (ids_.length == 1 && strcmp(ids_[0], "dummy_result")) {
+            ids_ = new string[](0);
+        }
+    }
+
+    /// @notice Check if two strings are equal.
+    /// @param _a First string.
+    /// @param _b Second string.
+    /// @return True if the strings are equal, false otherwise.
+    function strcmp(string memory _a, string memory _b) internal pure returns (bool) {
+        return keccak256(bytes(_a)) == keccak256(bytes(_b));
     }
 
     function _getForgeArtifactDirectory(string memory _name) internal returns (string memory dir_) {
