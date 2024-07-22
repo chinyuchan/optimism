@@ -66,8 +66,7 @@
     "prettier": "^2.8.0",
     "rimraf": "^5.0.5",
     "ts-mocha": "^10.0.0",
-    "typescript": "^5.5.3",
-    "wait-on": "^7.2.0"
+    "typescript": "^5.5.3"
   },
   "dependencies": {
     "@changesets/cli": "^2.27.7"
