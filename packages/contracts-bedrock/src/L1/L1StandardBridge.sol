@@ -8,6 +8,8 @@ import { CrossDomainMessenger } from "src/universal/CrossDomainMessenger.sol";
 import { SuperchainConfig } from "src/L1/SuperchainConfig.sol";
 import { OptimismPortal } from "src/L1/OptimismPortal.sol";
 import { SystemConfig } from "src/L1/SystemConfig.sol";
+import { IERC20 } from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @custom:proxied
 /// @title L1StandardBridge
@@ -20,6 +22,8 @@ import { SystemConfig } from "src/L1/SystemConfig.sol";
 ///         of some token types that may not be properly supported by this contract include, but are
 ///         not limited to: tokens with transfer fees, rebasing tokens, and tokens with blocklists.
 contract L1StandardBridge is StandardBridge, ISemver {
+    using SafeERC20 for IERC20;
+
     /// @custom:legacy
     /// @notice Emitted whenever a deposit of ETH from L1 into L2 is initiated.
     /// @param from      Address of the depositor.
@@ -69,6 +73,16 @@ contract L1StandardBridge is StandardBridge, ISemver {
         uint256 amount,
         bytes extraData
     );
+
+    event DepositERC20ReceiveETH(
+        address indexed l1Token,
+        address indexed from, // L1 depositor
+        address to, // L2 recipient
+        uint256 amount,
+        bytes extraData
+    );
+
+    mapping(address => mapping(address => uint256)) public depositsL1erc20L2eth;
 
     /// @notice Semantic version.
     /// @custom:semver 2.2.0
@@ -168,7 +182,20 @@ contract L1StandardBridge is StandardBridge, ISemver {
         virtual
         onlyEOA
     {
-        _initiateERC20Deposit(_l1Token, _l2Token, msg.sender, msg.sender, _amount, _minGasLimit, _extraData);
+        if (systemConfig.getERC20Token() == _l1Token) {
+            require(_l1Token != address(0),"invalid l1token");
+            require(_amount != 0, "invalid amount");
+
+            IERC20(_l1Token).safeTransferFrom(msg.sender, address(this), _amount);
+            depositsL1erc20L2eth[msg.sender][msg.sender] += _amount;
+
+            _initiateBridgeETH2(msg.sender, msg.sender, _amount, _minGasLimit, _extraData);
+
+            emit DepositERC20ReceiveETH(_l1Token, msg.sender, msg.sender, _amount, _extraData);
+        }
+        else {
+            _initiateERC20Deposit(_l1Token, _l2Token, msg.sender, msg.sender, _amount, _minGasLimit, _extraData);
+        }
     }
 
     /// @custom:legacy
@@ -192,7 +219,21 @@ contract L1StandardBridge is StandardBridge, ISemver {
         external
         virtual
     {
-        _initiateERC20Deposit(_l1Token, _l2Token, msg.sender, _to, _amount, _minGasLimit, _extraData);
+        if (systemConfig.getERC20Token() == _l1Token) {
+            require(_l1Token != address(0),"invalid l1token");
+            require(_to != address(0), "invalid to");
+            require(_amount != 0, "invalid amount");
+
+            IERC20(_l1Token).safeTransferFrom(msg.sender, address(this), _amount);
+            depositsL1erc20L2eth[msg.sender][_to] += _amount;
+
+            _initiateBridgeETH2(msg.sender, _to, _amount, _minGasLimit, _extraData);
+
+            emit DepositERC20ReceiveETH(_l1Token, msg.sender, _to, _amount, _extraData);
+        }
+        else {
+            _initiateERC20Deposit(_l1Token, _l2Token, msg.sender, _to, _amount, _minGasLimit, _extraData);
+        }
     }
 
     /// @custom:legacy

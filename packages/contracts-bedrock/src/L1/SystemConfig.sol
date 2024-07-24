@@ -41,6 +41,8 @@ contract SystemConfig is OwnableUpgradeable, ISemver, IGasToken {
         address gasPayingToken;
     }
 
+    address public erc20Token;
+
     /// @notice Version identifier, used for upgrades.
     uint256 public constant VERSION = 0;
 
@@ -123,6 +125,8 @@ contract SystemConfig is OwnableUpgradeable, ISemver, IGasToken {
     /// @param data       Encoded update data.
     event ConfigUpdate(uint256 indexed version, UpdateType indexed updateType, bytes data);
 
+    event SetERC20Token(address indexed erc20Token);
+
     /// @notice Semantic version.
     /// @custom:semver 2.3.0-beta.2
     function version() public pure virtual returns (string memory) {
@@ -160,7 +164,8 @@ contract SystemConfig is OwnableUpgradeable, ISemver, IGasToken {
                 optimismPortal: address(0),
                 optimismMintableERC20Factory: address(0),
                 gasPayingToken: address(0)
-            })
+            }),
+            _erc20Token: address(0)
         });
     }
 
@@ -185,7 +190,8 @@ contract SystemConfig is OwnableUpgradeable, ISemver, IGasToken {
         address _unsafeBlockSigner,
         ResourceMetering.ResourceConfig memory _config,
         address _batchInbox,
-        SystemConfig.Addresses memory _addresses
+        SystemConfig.Addresses memory _addresses,
+        address _erc20Token
     )
         public
         initializer
@@ -197,6 +203,7 @@ contract SystemConfig is OwnableUpgradeable, ISemver, IGasToken {
         _setBatcherHash(_batcherHash);
         _setGasConfigEcotone({ _basefeeScalar: _basefeeScalar, _blobbasefeeScalar: _blobbasefeeScalar });
         _setGasLimit(_gasLimit);
+        _setERC20Token(_erc20Token);
 
         Storage.setAddress(UNSAFE_BLOCK_SIGNER_SLOT, _unsafeBlockSigner);
         Storage.setAddress(BATCH_INBOX_SLOT, _batchInbox);
@@ -412,6 +419,20 @@ contract SystemConfig is OwnableUpgradeable, ISemver, IGasToken {
 
         bytes memory data = abi.encode(_gasLimit);
         emit ConfigUpdate(VERSION, UpdateType.GAS_LIMIT, data);
+    }
+
+    function setERC20Token(address _erc20Token) external onlyOwner {
+        _setERC20Token(_erc20Token);
+    }
+
+    function getERC20Token() view public returns(address) {
+        return erc20Token;
+    }
+
+    function _setERC20Token(address _erc20Token) internal {
+        require(_erc20Token != address(0), "invalid erc20");
+        erc20Token = _erc20Token;
+        emit SetERC20Token(_erc20Token);
     }
 
     /// @notice Sets the start block in a backwards compatible way. Proxies
